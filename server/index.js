@@ -16,8 +16,8 @@
 //     })
 // })
 
-import { WebSocketServer } from 'ws'
-import * as Y from 'yjs'
+const { WebSocketServer } = require('ws')
+const Y = require('yjs')
 
 const wss = new WebSocketServer({
   port: process.env.PORT || 3000
@@ -34,7 +34,7 @@ function getDoc(docId) {
   return docs.get(docId)
 }
 
-console.log('[WS] Yjs relay server started')
+console.log('[WS] CRDT server running')
 
 wss.on('connection', (ws) => {
   let currentDocId = null
@@ -46,26 +46,26 @@ wss.on('connection', (ws) => {
     try {
       msg = JSON.parse(raw.toString())
     } catch (e) {
-      console.error('Invalid message', e)
+      console.error('Invalid message:', e)
       return
     }
 
-    // 1. JOIN DOC
+    // JOIN DOC
     if (msg.type === 'join') {
       currentDocId = msg.docId
       doc = getDoc(currentDocId)
 
-      console.log(`[WS] client joined doc: ${currentDocId}`)
+      console.log('[WS] client joined:', currentDocId)
       return
     }
 
-    // 2. CRDT UPDATE
+    // CRDT UPDATE
     if (msg.type === 'update') {
       if (!doc) return
 
       const update = new Uint8Array(msg.update)
 
-      // apply update to server doc state
+      // apply update to server state
       Y.applyUpdate(doc, update)
 
       // broadcast to others
@@ -78,8 +78,6 @@ wss.on('connection', (ws) => {
           }))
         }
       })
-
-      return
     }
   })
 
