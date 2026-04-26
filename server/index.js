@@ -1,12 +1,14 @@
-const ws = require('ws')
+const WebSocket = require('ws')
 
-const server = new ws.Server({port: '80'})
+const port = process.env.PORT || 3000
 
-console.log("Server launched and ready to listen")
+const server = new WebSocket.Server({ port })
+
+console.log(`Server running on port ${port}`)
 
 server.on('connection', socket => {
     socket.on('message', message => {
-        console.log(message)
-        socket.send(`${message}`)
+        console.log(message.toString())
+        socket.send(message.toString())
     })
 })
