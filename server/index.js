@@ -80,5 +80,10 @@
 //     input.value = value
 // })
 
-import { createServer } from 'y-websocket/bin/utils.js'
-createServer({ port: process.env.PORT || 3000 })
+const { createServer } = require('y-websocket/bin/utils.js')
+
+const port = process.env.PORT || 3000
+
+createServer({ port })
+
+console.log('[WS] y-websocket server running on port', port)
