@@ -16,74 +16,74 @@
 //     })
 // })
 
-// import * as Y from 'yjs'
+import { WebSocketServer } from 'ws'
+import * as Y from 'yjs'
 
-// const socket = new WebSocket('wss://crdt-server.onrender.com')
+const wss = new WebSocketServer({
+  port: process.env.PORT || 3000
+})
 
-// const doc = new Y.Doc()
-// const ytext = doc.getText('document')
+// docId -> Y.Doc
+const docs = new Map()
 
-// // ===== DEBUG: SOCKET STATE =====
-// socket.addEventListener('open', () => {
-//     console.log('[WS] Connected to server')
-// })
+function getDoc(docId) {
+  if (!docs.has(docId)) {
+    const doc = new Y.Doc()
+    docs.set(docId, doc)
+  }
+  return docs.get(docId)
+}
 
-// socket.addEventListener('close', () => {
-//     console.warn('[WS] Connection closed')
-// })
+console.log('[WS] Yjs relay server started')
 
-// socket.addEventListener('error', (err) => {
-//     console.error('[WS] Error:', err)
-// })
+wss.on('connection', (ws) => {
+  let currentDocId = null
+  let doc = null
 
-// // ===== DEBUG: SEND UPDATES =====
-// doc.on('update', update => {
-//     console.log('[CRDT] Local update generated:', update.byteLength, 'bytes')
+  ws.on('message', (raw) => {
+    let msg
 
-//     if (socket.readyState === WebSocket.OPEN) {
-//         socket.send(update)
-//         console.log('[WS] Update sent to server')
-//     } else {
-//         console.warn('[WS] Tried to send, but socket not open')
-//     }
-// })
+    try {
+      msg = JSON.parse(raw.toString())
+    } catch (e) {
+      console.error('Invalid message', e)
+      return
+    }
 
-// // ===== DEBUG: RECEIVE UPDATES =====
-// socket.addEventListener('message', event => {
-//     const update = new Uint8Array(event.data)
+    // 1. JOIN DOC
+    if (msg.type === 'join') {
+      currentDocId = msg.docId
+      doc = getDoc(currentDocId)
 
-//     console.log('[WS] Update received:', update.byteLength, 'bytes')
+      console.log(`[WS] client joined doc: ${currentDocId}`)
+      return
+    }
 
-//     Y.applyUpdate(doc, update)
+    // 2. CRDT UPDATE
+    if (msg.type === 'update') {
+      if (!doc) return
 
-//     console.log('[CRDT] Update applied')
-// })
+      const update = new Uint8Array(msg.update)
 
-// // ===== INPUT BINDING =====
-// const input = document.querySelector('input')
+      // apply update to server doc state
+      Y.applyUpdate(doc, update)
 
-// input.addEventListener('input', () => {
-//     doc.transact(() => {
-//         console.log('[UI] User input:', input.value)
+      // broadcast to others
+      wss.clients.forEach(client => {
+        if (client !== ws && client.readyState === 1) {
+          client.send(JSON.stringify({
+            type: 'update',
+            docId: currentDocId,
+            update: msg.update
+          }))
+        }
+      })
 
-//         ytext.delete(0, ytext.length)
-//         ytext.insert(0, input.value)
-//     })
-// })
+      return
+    }
+  })
 
-// // ===== RENDER =====
-// ytext.observe(() => {
-//     const value = ytext.toString()
-
-//     console.log('[CRDT] Document changed → UI update')
-
-//     input.value = value
-// })
-
-const { createServer } = require('y-websocket/bin/utils.js')
-
-const port = process.env.PORT || 3000
-
-createServer({ port })
-
-console.log('[WS] y-websocket server running on port', port)
+  ws.on('close', () => {
+    console.log('[WS] client disconnected')
+  })
+})
