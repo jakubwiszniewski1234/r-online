@@ -79,6 +79,13 @@ wss.on('connection', (ws) => {
         }
       })
     }
+
+    if (msg.type === 'ack') {
+      console.log('[WS] ACK received:', msg)
+
+      // opcjonalnie: możesz logować, liczyć statystyki itd.
+      return
+    }
   })
 
   ws.on('close', () => {
