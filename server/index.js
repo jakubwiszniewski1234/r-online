@@ -80,15 +80,18 @@ wss.on('connection', (ws) => {
       })
     }
 
-    if (msg.type === 'ack') {
-      console.log('[WS] ACK received:', msg)
+    if (msg.type === 'ace_delta') {
+      console.log('[ACE DELTA]', msg.delta)
+      // opcjonalnie ACK
+      ws.send(JSON.stringify({
+        type: 'ack',
+        status: 'received'
+      }))
 
-      // opcjonalnie: możesz logować, liczyć statystyki itd.
       return
     }
-  })
-
-  ws.on('close', () => {
-    console.log('[WS] client disconnected')
+    ws.on('close', () => {
+      console.log('[WS] client disconnected')
+    })
   })
 })
