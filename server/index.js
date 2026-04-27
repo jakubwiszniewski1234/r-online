@@ -132,11 +132,29 @@ wss.on('connection', (ws) => {
     }
 
     // 1. JOIN
+    // if (msg.type === 'join') {
+    //   currentDocId = msg.docId
+    //   doc = getDoc(currentDocId)
+
+    //   console.log('[WS] client joined:', currentDocId)
+    //   return
+    // }
     if (msg.type === 'join') {
+
       currentDocId = msg.docId
       doc = getDoc(currentDocId)
 
+      ws.docId = currentDocId
+
+      const state = Y.encodeStateAsUpdate(doc)
+
+      ws.send(JSON.stringify({
+        type: "sync",
+        update: Array.from(state)
+      }))
+
       console.log('[WS] client joined:', currentDocId)
+
       return
     }
 
@@ -145,7 +163,7 @@ wss.on('connection', (ws) => {
       if (!doc) return
 
       const update = new Uint8Array(msg.update)
-
+      console.log('[WS] client sent update on', currentDocId)
       // apply CRDT update
       Y.applyUpdate(doc, update)
 
