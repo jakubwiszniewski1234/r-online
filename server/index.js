@@ -114,6 +114,10 @@ function getDoc(docId) {
   return docs.get(docId)
 }
 
+function identify(ws) {
+  return ws.clientId || "unknown-client"
+}
+
 console.log('[WS] Yjs CRDT server running')
 
 wss.on('connection', (ws) => {
@@ -146,14 +150,18 @@ wss.on('connection', (ws) => {
 
       ws.docId = currentDocId
 
+      ws.clientId = msg.clientId
+      console.log('[WS] client joined:', {
+        docId: currentDocId,
+        clientId: ws.clientId
+      })
+
       const state = Y.encodeStateAsUpdate(doc)
 
       ws.send(JSON.stringify({
         type: "sync",
         update: Array.from(state)
       }))
-
-      console.log('[WS] client joined:', currentDocId)
 
       return
     }
@@ -163,7 +171,7 @@ wss.on('connection', (ws) => {
       if (!doc) return
 
       const update = new Uint8Array(msg.update)
-      console.log('[WS] client sent update on', currentDocId)
+      console.log('[WS] update from:', identify(ws), 'doc:', currentDocId)
       // apply CRDT update
       Y.applyUpdate(doc, update)
 
@@ -173,7 +181,8 @@ wss.on('connection', (ws) => {
           client.send(JSON.stringify({
             type: 'update',
             docId: currentDocId,
-            update: msg.update
+            update: msg.update,
+            source: ws.clientId
           }))
         }
       })
