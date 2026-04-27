@@ -171,7 +171,7 @@ wss.on('connection', (ws) => {
       if (!doc) return
 
       const update = new Uint8Array(msg.update)
-      console.log('[WS] update from:', identify(ws), 'doc:', currentDocId)
+      console.log('[WS] update from:', msg.clientId || 'unknown')
       // apply CRDT update
       Y.applyUpdate(doc, update)
 
@@ -180,9 +180,8 @@ wss.on('connection', (ws) => {
         if (client !== ws && client.readyState === 1) {
           client.send(JSON.stringify({
             type: 'update',
-            docId: currentDocId,
             update: msg.update,
-            source: ws.clientId
+            clientId: msg.clientId
           }))
         }
       })
