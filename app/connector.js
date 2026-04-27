@@ -193,7 +193,6 @@ const ytext = doc.getText("doc")
 // --- WS server for ACE clients ---
 const wss = new WebSocket.Server({ port: 4001 })
 let clients = new Set()
-let lastSourceClientId = null
 
 wss.on('connection', (ws) => {
   console.log("[WS] ACE client connected")
@@ -215,8 +214,7 @@ function broadcastFullText() {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify({
         type: "full_text",
-        text,
-        source: lastSourceClientId
+        text
       }))
     }
   }
@@ -315,8 +313,7 @@ function applyDelta(delta) {
 // --- ACE → CRDT ---
 app.post('/ace-delta', (req, res) => {
 
-  const { deltas, clientId } = req.body
-  lastSourceClientId = clientId
+  const { deltas } = req.body
 
   console.log("[ACE → BRIDGE] received:", req.body)
 
