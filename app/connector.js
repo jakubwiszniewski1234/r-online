@@ -190,6 +190,25 @@ let socketReady = false
 const doc = new Y.Doc()
 const ytext = doc.getText("doc")
 
+let currentText = ytext.toString()
+
+ytext.observe(event => {
+  const aceDeltas = yDeltaToAceDeltas(event.delta, currentText)
+  //console.log(aceDeltas)
+
+  // wyślij do Ace
+  for (const client of clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({
+        type: "partial",
+        aceDeltas
+      }))
+    }
+  }
+
+  currentText = ytext.toString()
+})
+
 // --- WS server for ACE clients ---
 const wss = new WebSocket.Server({ port: 4001 })
 let clients = new Set()
@@ -218,6 +237,8 @@ function broadcastFullText() {
       }))
     }
   }
+
+  //broadcastFullText()
 }
 
 // --- WS connect to CRDT ---
@@ -260,10 +281,8 @@ function connectWS() {
       console.log("[CRDT → BRIDGE] update received")
 
       const update = new Uint8Array(msg.update)
-
       Y.applyUpdate(doc, update)
 
-      // 🔥 NOWE: push do ACE
       broadcastFullText()
     }
   })
@@ -281,7 +300,7 @@ function isValidDelta(delta) {
 
 function positionToIndex(delta) {
   let index = 0
-
+  console.log(delta)
   const start = delta.start || { row: 0, column: 0 }
   const lines = delta.lines || []
 
@@ -310,6 +329,62 @@ function applyDelta(delta) {
   }
 }
 
+function yDeltaToAceDeltas(delta, oldText) {
+  const deltas = []
+  let index = 0
+
+  function indexToPos(text, index) {
+    const lines = text.slice(0, index).split('\n')
+    return {
+      row: lines.length - 1,
+      column: lines[lines.length - 1].length
+    }
+  }
+
+  for (const op of delta) {
+    if (op.retain) {
+      index += op.retain
+    }
+
+    if (op.insert) {
+      const start = indexToPos(oldText, index)
+      const lines = op.insert.split('\n')
+
+      deltas.push({
+        start,
+        end: start,
+        action: 'insert',
+        lines
+      })
+
+      index += op.insert.length
+      oldText =
+        oldText.slice(0, index - op.insert.length) +
+        op.insert +
+        oldText.slice(index - op.insert.length)
+    }
+
+    if (op.delete) {
+      const start = indexToPos(oldText, index)
+      const deletedText = oldText.slice(index, index + op.delete)
+      const end = indexToPos(oldText, index + op.delete)
+
+      deltas.push({
+        start,
+        end,
+        action: 'remove',
+        lines: deletedText.split('\n')
+      })
+
+      oldText =
+        oldText.slice(0, index) +
+        oldText.slice(index + op.delete)
+    }
+  }
+
+  return deltas
+}
+
 // --- ACE → CRDT ---
 app.post('/ace-delta', (req, res) => {
 
@@ -328,7 +403,6 @@ app.post('/ace-delta', (req, res) => {
     for (const delta of deltas) {
 
       if (!isValidDelta(delta)) continue
-
       applyDelta(delta)
     }
 

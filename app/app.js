@@ -44,6 +44,7 @@ socket.addEventListener('message', (event) => {
 
 // ===== UI =====
 const input = document.querySelector('input')
+const p = document.querySelector('p')
 
 // UI → CRDT
 input.addEventListener('input', () => {
@@ -56,4 +57,5 @@ input.addEventListener('input', () => {
 // CRDT → UI
 ytext.observe(() => {
     input.value = ytext.toString()
+    p.textContent = ytext.toString()
 })

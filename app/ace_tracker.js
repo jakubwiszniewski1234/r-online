@@ -67,7 +67,7 @@
     return new Promise(resolve => {
       const t = setInterval(() => {
 
-        const el = document.getElementById("rstudio_source_text_editor_1")
+        const el = document.getElementById("rstudio_source_text_editor_0")
         if (!el || !window.ace) return
 
         const editor = ace.edit(el)
@@ -97,7 +97,7 @@
       if (msg.type === "full_text") {
 
         if (msg.source === CLIENT_ID) {
-          return // 🔥 ignoruj własny echo update
+          return
         }
 
         isRemote = true
@@ -105,6 +105,26 @@
         editor.setValue(msg.text, -1)
         editor.moveCursorTo(cursor.row, cursor.column)
         isRemote = false
+      }
+      
+      if (msg.type === "partial") {
+
+        if (msg.source === CLIENT_ID) {
+          return
+        }
+
+        console.log(msg.aceDeltas)
+        isRemote = true
+        msg.aceDeltas.forEach(d => editor.session.getDocument().applyDelta(d))
+        isRemote = false
+
+        // insert text (using ace deltas)
+
+        // isRemote = true
+        // const cursor = editor.getCursorPosition()
+        // editor.setValue(msg.text, -1)
+        // editor.moveCursorTo(cursor.row, cursor.column)
+        // isRemote = false
       }
     }
 
@@ -129,7 +149,7 @@
           deltas: queue
         })
       })
-
+      console.log("queue:", queue)
       queue = []
     }
 
@@ -142,7 +162,7 @@
 
       timer = setTimeout(() => {
         flush()
-      }, 30)
+      }, 20)
     })
 
   })
