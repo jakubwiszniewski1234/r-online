@@ -1,204 +1,160 @@
-// // const WebSocket = require('ws')
+import { WebSocketServer } from 'ws';
 
-// // const port = process.env.PORT || 3000
-// // const server = new WebSocket.Server({ port })
+// Server deployment
 
-// // console.log(`Server running on port ${port}`)
-
-// // server.on('status', event => {
-// //   console.log(event.status)
-// // })
-
-// // server.on('connection', socket => {
-// //     socket.on('message', message => {
-// //         console.log(message.toString())
-// //         socket.send(message.toString())
-// //     })
-// // })
-
-// const { WebSocketServer } = require('ws')
-// const Y = require('yjs')
-
-// const wss = new WebSocketServer({
-//   port: process.env.PORT || 3000
-// })
-
-// // docId -> Y.Doc
-// const docs = new Map()
-
-// function getDoc(docId) {
-//   if (!docs.has(docId)) {
-//     const doc = new Y.Doc()
-//     docs.set(docId, doc)
-//   }
-//   return docs.get(docId)
-// }
-
-// console.log('[WS] CRDT server running')
-
-// wss.on('connection', (ws) => {
-//   let currentDocId = null
-//   let doc = null
-
-//   ws.on('message', (raw) => {
-//     let msg
-
-//     try {
-//       msg = JSON.parse(raw.toString())
-//     } catch (e) {
-//       console.error('Invalid message:', e)
-//       return
-//     }
-
-//     // JOIN DOC
-//     if (msg.type === 'join') {
-//       currentDocId = msg.docId
-//       doc = getDoc(currentDocId)
-
-//       console.log('[WS] client joined:', currentDocId)
-//       return
-//     }
-
-//     // CRDT UPDATE
-//     if (msg.type === 'update') {
-//       if (!doc) return
-
-//       const update = new Uint8Array(msg.update)
-
-//       // apply update to server state
-//       Y.applyUpdate(doc, update)
-
-//       // broadcast to others
-//       wss.clients.forEach(client => {
-//         if (client !== ws && client.readyState === 1) {
-//           client.send(JSON.stringify({
-//             type: 'update',
-//             docId: currentDocId,
-//             update: msg.update
-//           }))
-//         }
-//       })
-//     }
-
-//     if (msg.type === 'ace_delta') {
-//       console.log('[ACE DELTA]', msg.delta)
-//       // opcjonalnie ACK
-//       ws.send(JSON.stringify({
-//         type: 'ack',
-//         status: 'received'
-//       }))
-
-//       return
-//     }
-//     ws.on('close', () => {
-//       console.log('[WS] client disconnected')
-//     })
-//   })
-// })
-
-const { WebSocketServer } = require('ws')
-const Y = require('yjs')
-
+const PORT = process.env.PORT || 3000
 const wss = new WebSocketServer({
-  port: process.env.PORT || 3000
+    port: PORT
 })
 
-// docId -> Y.Doc
-const docs = new Map()
+
+
+// Shared document
+
+const docs = new Map();
 
 function getDoc(docId) {
   if (!docs.has(docId)) {
-    const doc = new Y.Doc()
-    docs.set(docId, doc)
+    docs.set(docId, {
+      text: '',
+      revision: 0,
+      history: []
+    });
   }
-  return docs.get(docId)
+  return docs.get(docId);
 }
 
-function identify(ws) {
-  return ws.clientId || "unknown-client"
+// Changes to text transformation
+
+function posToIndex(text, pos) {
+  const lines = text.split('\n');
+  let idx = 0;
+  for (let i = 0; i < pos.row; i++) idx += lines[i].length + 1;
+  return idx + pos.column;
 }
 
-console.log('[WS] Yjs CRDT server running')
+function applyDeltaToText(text, delta) {
+  const start = posToIndex(text, delta.start);
+  const end = posToIndex(text, delta.end);
 
-wss.on('connection', (ws) => {
+  if (delta.action === 'insert') {
+    const inserted = delta.lines.join('\n');
+    return text.slice(0, start) + inserted + text.slice(start);
+  }
 
-  let currentDocId = null
-  let doc = null
+  return text.slice(0, start) + text.slice(end);
+}
 
-  ws.on('message', (raw) => {
+function deltaToRangeLen(delta, text) {
+  const start = posToIndex(text, delta.start);
+  const end = posToIndex(text, delta.end);
+  return { start, end, len: end - start };
+}
 
-    let msg
-    try {
-      msg = JSON.parse(raw.toString())
-    } catch (e) {
-      console.error('Invalid message:', e)
-      return
-    }
+function transformIndexInsert(index, insertPos, insertLen) {
+  return index >= insertPos ? index + insertLen : index;
+}
 
-    // 1. JOIN
-    // if (msg.type === 'join') {
-    //   currentDocId = msg.docId
-    //   doc = getDoc(currentDocId)
+function transformIndexDelete(index, delStart, delEnd) {
+  if (index <= delStart) return index;
+  if (index >= delEnd) return index - (delEnd - delStart);
+  return delStart;
+}
 
-    //   console.log('[WS] client joined:', currentDocId)
-    //   return
-    // }
-    if (msg.type === 'join') {
+function transformDelta(delta, applied, textBeforeApplied) {
+  const s = posToIndex(textBeforeApplied, delta.start);
+  const e = posToIndex(textBeforeApplied, delta.end);
+  const aStart = posToIndex(textBeforeApplied, applied.start);
+  const aEnd = posToIndex(textBeforeApplied, applied.end);
 
-      currentDocId = msg.docId
-      doc = getDoc(currentDocId)
+  if (applied.action === 'insert') {
+    const insLen = applied.lines.join('\n').length;
+    return {
+      ...delta,
+      start: { ...delta.start, column: transformIndexInsert(s, aStart, insLen) },
+      end: { ...delta.end, column: transformIndexInsert(e, aStart, insLen) }
+    };
+  }
 
-      ws.docId = currentDocId
+  if (applied.action === 'remove') {
+    return {
+      ...delta,
+      start: { ...delta.start, column: transformIndexDelete(s, aStart, aEnd) },
+      end: { ...delta.end, column: transformIndexDelete(e, aStart, aEnd) }
+    };
+  }
 
-      ws.clientId = msg.clientId
-      console.log('[WS] client joined:', {
-        docId: currentDocId,
-        clientId: ws.clientId
-      })
+  return delta;
+}
 
-      const state = Y.encodeStateAsUpdate(doc)
+
+
+// Server responses
+
+wss.on('connection', ws => {
+  ws.on('message', raw => {
+    const msg = JSON.parse(raw.toString());
+
+    // Handshake
+    if (msg.type === 'hello') {
+      const doc = getDoc(msg.docId);
+      ws.docId = msg.docId;
+      ws.clientId = msg.clientId;
+
+      console.log(`Recieved a "hello" message from ${ws.clientId} on file ${ws.docId}.`)
 
       ws.send(JSON.stringify({
-        type: "sync",
-        update: Array.from(state)
-      }))
-
-      return
+        type: 'snapshot',
+        docId: msg.docId,
+        text: doc.text,
+        revision: doc.revision
+      }));
+      return;
     }
 
-    // 2. YJS UPDATE (CORE PROTOKÓŁ)
-    if (msg.type === 'update') {
-      if (!doc) return
-
-      const update = new Uint8Array(msg.update)
-      console.log('[WS] update from:', msg.clientId || 'unknown')
-      // apply CRDT update
-      Y.applyUpdate(doc, update)
-
-      // broadcast do innych klientów
-      wss.clients.forEach(client => {
-        if (client !== ws && client.readyState === 1) {
-          client.send(JSON.stringify({
-            type: 'update',
-            update: msg.update,
-            clientId: msg.clientId
-          }))
-        }
-      })
-
-      return
+    
+    // Ignore unrelated queries
+    if (msg.type !== 'delta') {
+        console.log(`Got a weird message of type ${msg.type}.`)
     }
 
-    // 3. ACK (opcjonalne)
-    if (msg.type === 'ack') {
-      console.log('[WS] ack:', msg)
-      return
+
+    // New changes query
+    const doc = getDoc(msg.docId);
+    if (!ws.docId) ws.docId = msg.docId;
+
+    if (msg.baseRevision < doc.revision) {
+      let transformed = msg.delta;
+      for (let i = msg.baseRevision; i < doc.history.length; i++) {
+        const applied = doc.history[i];
+        transformed = transformDelta(transformed, applied.delta, doc.text);
+      }
+      msg.delta = transformed;
+      msg.baseRevision = doc.revision;
     }
 
-  })
+    doc.text = applyDeltaToText(doc.text, msg.delta);
+    doc.revision += 1;
+    doc.history.push({
+      revision: doc.revision,
+      clientId: msg.clientId,
+      opId: msg.opId,
+      delta: msg.delta
+    });
 
-  ws.on('close', () => {
-    console.log('[WS] client disconnected')
-  })
+    const out = JSON.stringify({
+      type: 'delta',
+      docId: msg.docId,
+      sourceClientId: msg.clientId,
+      opId: msg.opId,
+      revision: doc.revision,
+      delta: msg.delta
+    });
 
-})
+    for (const client of wss.clients) {
+      if (client.readyState === 1) client.send(out);
+    }
+  });
+});
+
+console.log(`WS server running on port ${PORT}.`);
