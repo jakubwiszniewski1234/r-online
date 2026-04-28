@@ -125,6 +125,8 @@ wss.on('connection', ws => {
           client.send(out);
         }
       }
+      
+      return
     }
 
 
