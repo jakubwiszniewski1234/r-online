@@ -116,6 +116,7 @@ wss.on('connection', ws => {
     // Ignore unrelated queries
     if (msg.type !== 'delta') {
         console.log(`Got a weird message of type ${msg.type}.`)
+        return
     }
 
 
