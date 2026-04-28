@@ -1,4 +1,4 @@
-import { WebSocketServer } from 'ws';
+const { WebSocketServer } = require('ws');
 
 // Server deployment
 
@@ -112,7 +112,7 @@ wss.on('connection', ws => {
       return;
     }
 
-    
+
     // Ignore unrelated queries
     if (msg.type !== 'delta') {
         console.log(`Got a weird message of type ${msg.type}.`)
