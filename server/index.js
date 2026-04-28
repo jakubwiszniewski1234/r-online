@@ -112,6 +112,21 @@ wss.on('connection', ws => {
       return;
     }
 
+    if (msg.type === 'cursor') {
+      const out = JSON.stringify({
+        type: 'cursor',
+        docId: msg.docId,
+        clientId: msg.clientId,
+        cursor: msg.cursor
+      });
+
+      for (const client of wss.clients) {
+        if (client.readyState === 1 && client.clientId !== msg.clientId) {
+          client.send(out);
+        }
+      }
+    }
+
 
     // Ignore unrelated queries
     if (msg.type !== 'delta') {
