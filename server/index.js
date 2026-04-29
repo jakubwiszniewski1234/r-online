@@ -1,178 +1,129 @@
-const { WebSocketServer } = require('ws');
+//
+// Headless ACE
+//
 
-// Server deployment
+//  Requirements
+require("amd-loader")
 
-const PORT = process.env.PORT || 3000
-const wss = new WebSocketServer({
-    port: PORT
-})
+const ace_modules_folder = "./ace_modules"
+global.ace = require(ace_modules_folder + "/ace.js")
+require(ace_modules_folder + "/test/mockdom")
 
+const MockRenderer = require(ace_modules_folder + "/test/mockrenderer").MockRenderer
+const Editor = require(ace_modules_folder + "/editor").Editor
+const EditSession = require(ace_modules_folder + "/edit_session").EditSession
+const Document = require(ace_modules_folder + "/document").Document
+const Delta = require(ace_modules_folder + "/document").Delta
 
+//  Setup
+const renderer = new MockRenderer()
+const editor = new Editor(renderer)
+const doc = new Document("")
+const session = new EditSession(doc)
+editor.setSession(session)
 
-// Shared document
-
-const docs = new Map();
+//  Map of documents
+const docs = new Map()
 
 function getDoc(docId) {
-  if (!docs.has(docId)) {
-    docs.set(docId, {
-      text: '',
-      revision: 0,
-      history: []
-    });
-  }
-  return docs.get(docId);
-}
-
-// Changes to text transformation
-
-function posToIndex(text, pos) {
-  const lines = text.split('\n');
-  let idx = 0;
-  for (let i = 0; i < pos.row; i++) idx += lines[i].length + 1;
-  return idx + pos.column;
-}
-
-function applyDeltaToText(text, delta) {
-  const start = posToIndex(text, delta.start);
-  const end = posToIndex(text, delta.end);
-
-  if (delta.action === 'insert') {
-    const inserted = delta.lines.join('\n');
-    return text.slice(0, start) + inserted + text.slice(start);
-  }
-
-  return text.slice(0, start) + text.slice(end);
-}
-
-function deltaToRangeLen(delta, text) {
-  const start = posToIndex(text, delta.start);
-  const end = posToIndex(text, delta.end);
-  return { start, end, len: end - start };
-}
-
-function transformIndexInsert(index, insertPos, insertLen) {
-  return index >= insertPos ? index + insertLen : index;
-}
-
-function transformIndexDelete(index, delStart, delEnd) {
-  if (index <= delStart) return index;
-  if (index >= delEnd) return index - (delEnd - delStart);
-  return delStart;
-}
-
-function transformDelta(delta, applied, textBeforeApplied) {
-  const s = posToIndex(textBeforeApplied, delta.start);
-  const e = posToIndex(textBeforeApplied, delta.end);
-  const aStart = posToIndex(textBeforeApplied, applied.start);
-  const aEnd = posToIndex(textBeforeApplied, applied.end);
-
-  if (applied.action === 'insert') {
-    const insLen = applied.lines.join('\n').length;
-    return {
-      ...delta,
-      start: { ...delta.start, column: transformIndexInsert(s, aStart, insLen) },
-      end: { ...delta.end, column: transformIndexInsert(e, aStart, insLen) }
-    };
-  }
-
-  if (applied.action === 'remove') {
-    return {
-      ...delta,
-      start: { ...delta.start, column: transformIndexDelete(s, aStart, aEnd) },
-      end: { ...delta.end, column: transformIndexDelete(e, aStart, aEnd) }
-    };
-  }
-
-  return delta;
+    if (!docs.has(docId)) {
+        docs.set(docId, {
+            doc: doc,
+            revision: 0,
+            history: []
+        })
+    }
+    return docs.get(docId);
 }
 
 
+//
+// Server setup
+//
 
-// Server responses
+// Setup
+const { WebSocketServer } = require('ws');
+const wss = new WebSocketServer({
+    port: process.env.PORT || 3000
+})
 
+//  Handle messages
 wss.on('connection', ws => {
-  ws.on('message', raw => {
-    const msg = JSON.parse(raw.toString());
+    ws.on("message", raw => {
+        const msg = JSON.parse(raw.toString())
 
-    // Handshake
-    if (msg.type === 'hello') {
-      const doc = getDoc(msg.docId);
-      ws.docId = msg.docId;
-      ws.clientId = msg.clientId;
+        // Handshake
+        if (msg.type === 'hello') {
+            // Save info about new user
+            ws.docId = msg.docId;
+            ws.clientId = msg.clientId
 
-      console.log(`Recieved a "hello" message from ${ws.clientId} on file ${ws.docId}.`)
+            console.log(`Recieved a "hello" message from ${ws.clientId} on file ${ws.docId}.`)
+            const doc = getDoc(msg.docId)
+            
+            ws.send(JSON.stringify({
+                type: 'snapshot',
+                docId: msg.docId,
+                text: doc.doc.text,
+                revision: doc.revision
+            }))
 
-      ws.send(JSON.stringify({
-        type: 'snapshot',
-        docId: msg.docId,
-        text: doc.text,
-        revision: doc.revision
-      }));
-      return;
-    }
-
-    if (msg.type === 'cursor') {
-      const out = JSON.stringify({
-        type: 'cursor',
-        docId: msg.docId,
-        clientId: msg.clientId,
-        cursor: msg.cursor
-      });
-
-      for (const client of wss.clients) {
-        if (client.readyState === 1 && client.clientId !== msg.clientId) {
-          client.send(out);
+            return
         }
-      }
-      
-      return
-    }
+
+        // New changes query
+        if (msg.type === 'delta') {
+            if (!ws.docId) ws.docId = msg.docId
+            console.log(`Recieved a "delta" message from ${ws.clientId} on file ${ws.docId}.`)
+
+            const doc = getDoc(ws.docId)
+            console.log("MSG:", msg.delta.length)
+
+            if (msg.baseRevision < doc.revision) {
+                
+                let transformed = msg.delta;
+                for (let i = msg.baseRevision; i < doc.history.length; i++) {
+                    const applied = doc.history[i].delta;
+                    
+                }
+                msg.delta = transformed;
+                msg.baseRevision = doc.revision;
+            }
+
+            console.log("MSG.delta:", msg.delta)
+
+            doc.doc.applyDeltas(msg.delta)
+            doc.revision += 1
+            doc.history.push({
+                revision: doc.revision,
+                clientId: msg.clientId,
+                opId: msg.opId,
+                delta: msg.delta
+            });
 
 
-    // Ignore unrelated queries
-    if (msg.type !== 'delta') {
-        console.log(`Got a weird message of type ${msg.type}.`)
-        return
-    }
+            const out = JSON.stringify({
+                type: 'delta',
+                docId: msg.docId,
+                sourceClientId: msg.clientId,
+                opId: msg.opId,
+                revision: doc.revision,
+                delta: msg.delta
+            });
 
+            for (const client of wss.clients) {
+              if (client.readyState === 1) client.send(out);
+            }
 
-    // New changes query
-    const doc = getDoc(msg.docId);
-    if (!ws.docId) ws.docId = msg.docId;
+            return
+        }
 
-    if (msg.baseRevision < doc.revision) {
-      let transformed = msg.delta;
-      for (let i = msg.baseRevision; i < doc.history.length; i++) {
-        const applied = doc.history[i];
-        transformed = transformDelta(transformed, applied.delta, doc.text);
-      }
-      msg.delta = transformed;
-      msg.baseRevision = doc.revision;
-    }
+        // Ignore unrelated queries
+        if (msg.type !== 'delta') {
+            console.log(`Got a weird message of type ${msg.type}.`)
+            return
+        }
+    })
+})
 
-    doc.text = applyDeltaToText(doc.text, msg.delta);
-    doc.revision += 1;
-    doc.history.push({
-      revision: doc.revision,
-      clientId: msg.clientId,
-      opId: msg.opId,
-      delta: msg.delta
-    });
-
-    const out = JSON.stringify({
-      type: 'delta',
-      docId: msg.docId,
-      sourceClientId: msg.clientId,
-      opId: msg.opId,
-      revision: doc.revision,
-      delta: msg.delta
-    });
-
-    for (const client of wss.clients) {
-      if (client.readyState === 1) client.send(out);
-    }
-  });
-});
-
-console.log(`WS server running on port ${PORT}.`);
+console.log(`[WSS] Server opened.`);
