@@ -1,170 +1,64 @@
-// (function () {
+const el = document.getElementById("rstudio_source_text_editor")
+const editor = ace.edit(el)
+const ws = new WebSocket('https://crdt-server.onrender.com');
 
-//   const BRIDGE_URL = "http://localhost:4000"
+const clientId = crypto.randomUUID();
+let revision = 0;
+let applyingRemote = false;
 
-//   function waitForEditor() {
-//     return new Promise(resolve => {
-//       const t = setInterval(() => {
+ws.onopen = () => {
+    ws.send(JSON.stringify({
+        type: 'hello',
+        docId: 'main',
+        clientId
+    }));
+};
+let pendingDeltas = []
+let debounceTimer
 
-//         const el = document.getElementById("rstudio_source_text_editor_1")
-//         if (!el || !window.ace) return
+editor.session.on('change', delta => {
+    if (applyingRemote) return
 
-//         const editor = ace.edit(el)
-//         clearInterval(t)
-//         resolve(editor)
+    pendingDeltas.push(delta)
+    
+    clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(() => {
+        console.log(pendingDeltas)
+        ws.send(JSON.stringify({
+            type: 'delta',
+            docId: 'main',
+            clientId,
+            opId: crypto.randomUUID(),
+            baseRevision: revision,
+            delta: pendingDeltas
+        }))
 
-//       }, 200)
-//     })
-//   }
+        pendingDeltas = []
+    }, 250)
+})
 
-//   waitForEditor().then(editor => {
+ws.onmessage = ev => {
+    const msg = JSON.parse(ev.data);
 
-//     let isRemote = false
-
-//     // 🔥 debounce buffer
-//     let queue = []
-//     let timer = null
-
-//     function flush() {
-//       if (queue.length === 0) return
-
-//       fetch(`${BRIDGE_URL}/ace-delta`, {
-//         method: "POST",
-//         headers: {
-//           "Content-Type": "application/json"
-//         },
-//         body: JSON.stringify({
-//           deltas: queue
-//         })
-//       })
-
-//       queue = []
-//     }
-
-//     editor.session.on('change', (delta) => {
-//       if (isRemote) return
-
-//       queue.push(delta)
-
-//       if (timer) clearTimeout(timer)
-
-//       timer = setTimeout(() => {
-//         flush()
-//       }, 30) // batching window
-//     })
-
-//   })
-
-// })()
-
-(function () {
-
-  const BRIDGE_URL = "http://localhost:4000"
-  const WS_URL = "ws://localhost:4001"
-  const CLIENT_ID = Math.random().toString(36).slice(2)
-
-  function waitForEditor() {
-    return new Promise(resolve => {
-      const t = setInterval(() => {
-
-        const el = document.getElementById("rstudio_source_text_editor_0")
-        if (!el || !window.ace) return
-
-        const editor = ace.edit(el)
-        clearInterval(t)
-        resolve(editor)
-
-      }, 200)
-    })
-  }
-
-  waitForEditor().then(editor => {
-
-    let isRemote = false
-
-    // --- WS connection ---
-    const ws = new WebSocket(WS_URL)
-
-    ws.onopen = () => {
-      console.log("[ACE] WS connected")
+    if (msg.type === 'snapshot') {
+        applyingRemote = true;
+        editor.setValue(msg.text, -1);
+        revision = msg.revision;
+        applyingRemote = false;
+        return;
     }
 
-    ws.onmessage = (event) => {
-
-      const msg = JSON.parse(event.data)
-      console.log(msg.source)
-
-      if (msg.type === "full_text") {
-
-        if (msg.source === CLIENT_ID) {
-          return
+    if (msg.type === 'delta') {
+        if (msg.sourceClientId === clientId) {
+            revision = msg.revision;
+            return;
         }
 
-        isRemote = true
-        const cursor = editor.getCursorPosition()
-        editor.setValue(msg.text, -1)
-        editor.moveCursorTo(cursor.row, cursor.column)
-        isRemote = false
-      }
-      
-      if (msg.type === "partial") {
+        console.log(msg.delta)
 
-        if (msg.source === CLIENT_ID) {
-          return
-        }
-
-        console.log(msg.aceDeltas)
-        isRemote = true
-        msg.aceDeltas.forEach(d => editor.session.getDocument().applyDelta(d))
-        isRemote = false
-
-        // insert text (using ace deltas)
-
-        // isRemote = true
-        // const cursor = editor.getCursorPosition()
-        // editor.setValue(msg.text, -1)
-        // editor.moveCursorTo(cursor.row, cursor.column)
-        // isRemote = false
-      }
+        applyingRemote = true;
+        editor.session.getDocument().applyDeltas(msg.delta);
+        revision = msg.revision;
+        applyingRemote = false;
     }
-
-    ws.onclose = () => {
-      console.log("[ACE] WS closed")
-    }
-
-    // --- debounce buffer ---
-    let queue = []
-    let timer = null
-
-    function flush() {
-      if (queue.length === 0) return
-
-      fetch(`${BRIDGE_URL}/ace-delta`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          clientId: CLIENT_ID,
-          deltas: queue
-        })
-      })
-      console.log("queue:", queue)
-      queue = []
-    }
-
-    editor.session.on('change', (delta) => {
-      if (isRemote) return
-
-      queue.push(delta)
-
-      if (timer) clearTimeout(timer)
-
-      timer = setTimeout(() => {
-        flush()
-      }, 20)
-    })
-
-  })
-
-})()
+};

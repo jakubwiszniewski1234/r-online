@@ -77,7 +77,6 @@ wss.on('connection', ws => {
             console.log(`Recieved a "delta" message from ${ws.clientId} on file ${ws.docId}.`)
 
             const doc = getDoc(ws.docId)
-            console.log("MSG:", msg.delta.length)
 
             if (msg.baseRevision < doc.revision) {
                 
@@ -89,8 +88,6 @@ wss.on('connection', ws => {
                 msg.delta = transformed;
                 msg.baseRevision = doc.revision;
             }
-
-            console.log("MSG.delta:", msg.delta)
 
             doc.doc.applyDeltas(msg.delta)
             doc.revision += 1
@@ -112,7 +109,7 @@ wss.on('connection', ws => {
             });
 
             for (const client of wss.clients) {
-              if (client.readyState === 1) client.send(out);
+              if (client.readyState === 1 && client.clientId != msg.clientId) client.send(out);
             }
 
             return
