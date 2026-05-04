@@ -1,0 +1,3 @@
+define(function(require, exports, module){module.exports = "snippet permit\n\tpermit (\n\t    principal == ${1:Principal}::\"${2:id}\",\n\t    action == Action::\"${3:action}\",\n\t    resource == ${4:Resource}::\"${5:id}\"\n\t)${0};\nsnippet permit_when\n\tpermit (principal, action, resource)\n\twhen { ${0:condition} };\nsnippet forbid\n\tforbid (principal, action, resource)\n\twhen { ${0:condition} };\nsnippet forbid_unless\n\tforbid (principal, action, resource)\n\tunless { ${0:condition} };\nsnippet when\n\twhen { ${0:condition} }\nsnippet unless\n\tunless { ${0:condition} }\nsnippet annotation\n\t@${1:name}(\"${2:value}\")\n";
+
+});
