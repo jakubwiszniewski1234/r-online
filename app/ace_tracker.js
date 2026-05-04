@@ -1,6 +1,46 @@
-const el = document.getElementById("rstudio_source_text_editor")
-const editor = ace.edit(el)
+// Find focused editor
+var allEditors = document.querySelectorAll(".ace_editor")
+
+for (var i = 0; i < allEditors.length; i++){
+    el = allEditors[i]
+    console.log(el)
+    if (el.id.includes("rstudio_source_text_editor")){
+        if (el.checkVisibility() == true){
+            var editor_element = ace.edit(el)
+            break
+        }
+    }
+}
+
+const editor = editor_element
+
+// Get server URL from user
+let inputServerElement = document.createElement("textarea")
+inputServerElement.style.padding = '30px'
+inputServerElement.style.border = '20px solid black'
+inputServerElement.style.backgroundColor = 'rgba(132, 255, 164, 1)'
+inputServerElement.value = "TEST"
+inputServerElement.style.zIndex = "100000"
+inputServerElement.style.position = "absolute"
+editor.container.appendChild(inputServerElement)
+
+var serverURL
+var ws_temp
+inputServerElement.addEventListener("change", () => {
+    serverURL = inputServerElement.value
+    console.log(serverURL)
+    try{
+        const ws = new WebSocket(serverURL)
+        // its an event listener so later code will compute anyway
+    } catch (e) {
+        console.log(e.name, e.message)
+    }
+})
+
+editor.container.appendChild(inputServerElement)
+
 const ws = new WebSocket('https://crdt-server.onrender.com');
+
 
 const clientId = crypto.randomUUID();
 let revision = 0;
@@ -13,6 +53,8 @@ ws.onopen = () => {
         clientId
     }));
 };
+
+
 let pendingDeltas = []
 let debounceTimer
 
@@ -34,7 +76,7 @@ editor.session.on('change', delta => {
         }))
 
         pendingDeltas = []
-    }, 250)
+    }, 30)
 })
 
 ws.onmessage = ev => {
