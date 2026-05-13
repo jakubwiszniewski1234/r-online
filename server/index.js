@@ -23,17 +23,17 @@ const editor = new Editor(renderer)
 // Map of documents
 const docs = new Map();
 
-function createDoc(initialDoc) {
+function createDoc(initialText) {
     return {
-        doc: new Document(initialDoc.getValue()),
+        doc: new Document(initialText),
         revision: 0,
         history: []
     }
 }
 
-function ensureDoc(docId, initialDoc) {
+function ensureDoc(docId, initialText) {
     if (!docs.has(docId)) {
-        docs.set(docId, createDoc(initialDoc))
+        docs.set(docId, createDoc(initialText))
     }
     return docs.get(docId)
 }
