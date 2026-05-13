@@ -34,6 +34,7 @@ function setDoc(docId, doc){
 
 function getDoc(docId) {
     if (!docs.has(docId)) {
+        console.log(`docId ${docId} not found`)
         return false
     }
     return docs.get(docId);
@@ -66,12 +67,13 @@ wss.on('connection', ws => {
 
             console.log(ws.docId)
             console.log(ws.clientId)
-
-            if (!getDoc(ws.docId)) 
+            console.log(getDoc(ws.docId))
+            if (!getDoc(ws.docId)) {
+                console.log("")
                 setDoc(ws.docId, msg.currentDoc)
                 const session = new EditSession(msg.currentDoc)
                 editor.setSession(session)
-
+            }
 
             console.log(`Recieved a "hello" message from ${ws.clientId} on file ${ws.docId}.`)
             const doc = getDoc(msg.docId)
