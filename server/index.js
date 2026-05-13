@@ -18,20 +18,23 @@ const Delta = require(ace_modules_folder + "/document").Delta
 //  Setup
 const renderer = new MockRenderer()
 const editor = new Editor(renderer)
-const doc = new Document("")
-const session = new EditSession(doc)
-editor.setSession(session)
+
+
 
 //  Map of documents
 const docs = new Map()
 
+function setDoc(docId, doc){
+    docs.set(docId, {
+        doc: doc ? doc : new Document(""),
+        revision: 0,
+        history: []
+    })
+}
+
 function getDoc(docId) {
     if (!docs.has(docId)) {
-        docs.set(docId, {
-            doc: doc,
-            revision: 0,
-            history: []
-        })
+        return false
     }
     return docs.get(docId);
 }
@@ -55,8 +58,14 @@ wss.on('connection', ws => {
         // Handshake
         if (msg.type === 'hello') {
             // Save info about new user
-            ws.docId = msg.docId;
+            ws.docId = msg.docId
             ws.clientId = msg.clientId
+
+            if (!getDoc(ws.docId)) 
+                setDoc(ws.docId, msg.currentDoc)
+                const session = new EditSession(msg.currentDoc)
+                editor.setSession(session)
+
 
             console.log(`Recieved a "hello" message from ${ws.clientId} on file ${ws.docId}.`)
             const doc = getDoc(msg.docId)
