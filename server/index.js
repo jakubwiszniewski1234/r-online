@@ -26,7 +26,7 @@ const docs = new Map()
 
 function setDoc(docId, doc){
     docs.set(docId, {
-        doc: doc ? doc : new Document(""),
+        doc: doc,
         revision: 0,
         history: []
     })
@@ -57,9 +57,15 @@ wss.on('connection', ws => {
 
         // Handshake
         if (msg.type === 'hello') {
+            console.log("Got hello message")
+            console.log(msg)
+
             // Save info about new user
             ws.docId = msg.docId
             ws.clientId = msg.clientId
+
+            console.log(ws.docId)
+            console.log(ws.clientId)
 
             if (!getDoc(ws.docId)) 
                 setDoc(ws.docId, msg.currentDoc)
