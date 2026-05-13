@@ -55,17 +55,17 @@ const wss = new WebSocketServer({
 
 //  Handle messages
 function handleHello(ws, msg) {
-    const { docId, clientId, currentDoc } = msg
+    const { docId, clientId, currentText } = msg
 
     if (!docId || !clientId) {
         console.error('Missing required fields in hello message')
-        return;
+        return
     }
 
     ws.docId = docId
     ws.clientId = clientId
 
-    const doc = ensureDoc(docId, currentDoc)
+    const doc = ensureDoc(docId, currentText)
 
     console.log(`Client ${clientId} connected to doc ${docId}`)
 
