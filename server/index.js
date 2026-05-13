@@ -20,24 +20,26 @@ const renderer = new MockRenderer()
 const editor = new Editor(renderer)
 
 
+// Map of documents
+const docs = new Map();
 
-//  Map of documents
-const docs = new Map()
-
-function setDoc(docId, doc){
-    docs.set(docId, {
-        doc: doc,
+function createDoc(initialDoc) {
+    return {
+        doc: new Document(initialDoc.getValue()),
         revision: 0,
         history: []
-    })
+    }
+}
+
+function ensureDoc(docId, initialDoc) {
+    if (!docs.has(docId)) {
+        docs.set(docId, createDoc(initialDoc))
+    }
+    return docs.get(docId)
 }
 
 function getDoc(docId) {
-    if (!docs.has(docId)) {
-        console.log(`docId ${docId} not found`)
-        return false
-    }
-    return docs.get(docId);
+    return docs.get(docId) || null
 }
 
 
@@ -52,39 +54,44 @@ const wss = new WebSocketServer({
 })
 
 //  Handle messages
+function handleHello(ws, msg) {
+    const { docId, clientId, currentDoc } = msg
+
+    if (!docId || !clientId) {
+        console.error('Missing required fields in hello message')
+        return;
+    }
+
+    ws.docId = docId
+    ws.clientId = clientId
+
+    const doc = ensureDoc(docId, currentDoc)
+
+    console.log(`Client ${clientId} connected to doc ${docId}`)
+
+    ws.send(JSON.stringify({
+        type: 'snapshot',
+        docId,
+        text: doc.doc.text,
+        revision: doc.revision
+    }));
+}
+
 wss.on('connection', ws => {
     ws.on("message", raw => {
-        const msg = JSON.parse(raw.toString())
+        let msg
+
+        try {
+            msg = JSON.parse(raw.toString());
+        } catch (err) {
+            console.error('Invalid JSON:', err)
+            return
+        }
 
         // Handshake
         if (msg.type === 'hello') {
             console.log("Got hello message")
-            console.log(msg)
-
-            // Save info about new user
-            ws.docId = msg.docId
-            ws.clientId = msg.clientId
-
-            console.log(ws.docId)
-            console.log(ws.clientId)
-            console.log(getDoc(ws.docId))
-            if (!getDoc(ws.docId)) {
-                console.log("")
-                setDoc(ws.docId, msg.currentDoc)
-                const session = new EditSession(msg.currentDoc)
-                editor.setSession(session)
-            }
-
-            console.log(`Recieved a "hello" message from ${ws.clientId} on file ${ws.docId}.`)
-            const doc = getDoc(msg.docId)
-            
-            ws.send(JSON.stringify({
-                type: 'snapshot',
-                docId: msg.docId,
-                text: doc.doc.text,
-                revision: doc.revision
-            }))
-
+            handleHello(ws, msg)
             return
         }
 
