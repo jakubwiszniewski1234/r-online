@@ -24,8 +24,11 @@ const editor = new Editor(renderer)
 const docs = new Map();
 
 function createDoc(initialText) {
+    const new_doc = new Document(initialText)
+    const session = new EditSession(new_doc)
+    editor.setSession(session)
     return {
-        doc: new Document(initialText),
+        doc: new_doc,
         revision: 0,
         history: []
     }
@@ -66,6 +69,7 @@ function handleHello(ws, msg) {
     ws.clientId = clientId
 
     const doc = ensureDoc(docId, currentText)
+    
 
     console.log(`Client ${clientId} connected to doc ${docId}`)
 
