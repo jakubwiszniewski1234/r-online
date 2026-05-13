@@ -18,17 +18,16 @@ const Delta = require(ace_modules_folder + "/document").Delta
 //  Setup
 const renderer = new MockRenderer()
 const editor = new Editor(renderer)
+const session = new EditSession()
 
 
 // Map of documents
 const docs = new Map();
 
 function createDoc(initialText) {
-    const new_doc = new Document(initialText)
-    const session = new EditSession(new_doc)
     editor.setSession(session)
     return {
-        doc: new_doc,
+        doc: new Document(initialText),
         revision: 0,
         history: []
     }
@@ -58,27 +57,7 @@ const wss = new WebSocketServer({
 
 //  Handle messages
 function handleHello(ws, msg) {
-    const { docId, clientId, currentText } = msg
-
-    if (!docId || !clientId) {
-        console.error('Missing required fields in hello message')
-        return
-    }
-
-    ws.docId = docId
-    ws.clientId = clientId
-
-    const doc = ensureDoc(docId, currentText)
     
-
-    console.log(`Client ${clientId} connected to doc ${docId}`)
-
-    ws.send(JSON.stringify({
-        type: 'snapshot',
-        docId,
-        text: doc.doc.text,
-        revision: doc.revision
-    }));
 }
 
 wss.on('connection', ws => {
@@ -95,7 +74,31 @@ wss.on('connection', ws => {
         // Handshake
         if (msg.type === 'hello') {
             console.log("Got hello message")
-            handleHello(ws, msg)
+            // handleHello(ws, msg)
+            const { docId, clientId, currentText } = msg
+
+            if (!docId || !clientId) {
+                console.error('Missing required fields in hello message')
+                return
+            }
+
+            ws.docId = docId
+            ws.clientId = clientId
+
+            const doc = ensureDoc(docId, currentText)
+            if(!session.getDocument){
+                session.setDocument(doc.doc)
+            }
+            
+
+            console.log(`Client ${clientId} connected to doc ${docId}`)
+
+            ws.send(JSON.stringify({
+                type: 'snapshot',
+                docId,
+                text: doc.doc.text,
+                revision: doc.revision
+            }));
             return
         }
 
