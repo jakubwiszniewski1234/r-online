@@ -24,6 +24,7 @@ const editor = new Editor(renderer)
 const docs = new Map();
 
 function createDoc(initialText) {
+    // Create new session
     const document = new Document(initialText)
     const session = new EditSession(document)
     editor.setSession(session)
@@ -37,6 +38,7 @@ function createDoc(initialText) {
 
 function ensureDoc(docId, initialText) {
     if (!docs.has(docId)) {
+        console.log("Creating new document...")
         docs.set(docId, createDoc(initialText))
     }
     return docs.get(docId)
@@ -87,16 +89,15 @@ wss.on('connection', ws => {
 
             const doc = ensureDoc(docId, currentText)
 
-            console.log(doc)
             console.log(doc.doc)
-            console.log(doc.doc.text)
+            console.log(doc.doc.lines)
 
             console.log(`Client ${clientId} connected to doc ${docId}`)
 
             ws.send(JSON.stringify({
                 type: 'snapshot',
                 docId,
-                text: doc.doc.text,
+                lines: doc.doc.lines,
                 revision: doc.revision
             }));
             return
