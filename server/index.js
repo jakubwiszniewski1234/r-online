@@ -97,7 +97,7 @@ wss.on('connection', ws => {
             ws.send(JSON.stringify({
                 type: 'snapshot',
                 docId,
-                lines: doc.doc.lines,
+                lines: doc.doc.getValue(),
                 revision: doc.revision
             }));
             return
