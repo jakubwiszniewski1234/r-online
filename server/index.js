@@ -18,16 +18,18 @@ const Delta = require(ace_modules_folder + "/document").Delta
 //  Setup
 const renderer = new MockRenderer()
 const editor = new Editor(renderer)
-const session = new EditSession()
+const document = new Document("")
+const session = new EditSession(document)
+editor.setSession(session)
 
 
 // Map of documents
 const docs = new Map();
 
 function createDoc(initialText) {
-    editor.setSession(session)
+    session.setValue(initialText)
     return {
-        doc: new Document(initialText),
+        doc: document,
         revision: 0,
         history: []
     }
@@ -56,10 +58,6 @@ const wss = new WebSocketServer({
 })
 
 //  Handle messages
-function handleHello(ws, msg) {
-    
-}
-
 wss.on('connection', ws => {
     ws.on("message", raw => {
         let msg
@@ -78,7 +76,7 @@ wss.on('connection', ws => {
             const { docId, clientId, currentText } = msg
 
             if (!docId || !clientId) {
-                console.error('Missing required fields in hello message')
+                console.error('Missing required fields in hello message.')
                 return
             }
 
@@ -86,10 +84,6 @@ wss.on('connection', ws => {
             ws.clientId = clientId
 
             const doc = ensureDoc(docId, currentText)
-            if(!session.getDocument){
-                session.setDocument(doc.doc)
-            }
-            
 
             console.log(`Client ${clientId} connected to doc ${docId}`)
 
