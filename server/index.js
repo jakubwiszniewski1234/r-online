@@ -18,16 +18,16 @@ const Delta = require(ace_modules_folder + "/document").Delta
 //  Setup
 const renderer = new MockRenderer()
 const editor = new Editor(renderer)
-const document = new Document("")
-const session = new EditSession(document)
-editor.setSession(session)
 
 
 // Map of documents
 const docs = new Map();
 
 function createDoc(initialText) {
-    document.setValue(initialText)
+    const document = new Document(initialText)
+    const session = new EditSession(document)
+    editor.setSession(session)
+    
     return {
         doc: document,
         revision: 0,
@@ -82,6 +82,8 @@ wss.on('connection', ws => {
 
             ws.docId = docId
             ws.clientId = clientId
+
+            console.log(currentText)
 
             const doc = ensureDoc(docId, currentText)
 
