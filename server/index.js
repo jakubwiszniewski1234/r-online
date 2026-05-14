@@ -27,7 +27,7 @@ editor.setSession(session)
 const docs = new Map();
 
 function createDoc(initialText) {
-    session.setValue(initialText)
+    document.setValue(initialText)
     return {
         doc: document,
         revision: 0,
