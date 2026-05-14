@@ -27,7 +27,7 @@ function createDoc(initialText) {
     const document = new Document(initialText)
     const session = new EditSession(document)
     editor.setSession(session)
-    
+
     return {
         doc: document,
         revision: 0,
@@ -52,7 +52,7 @@ function getDoc(docId) {
 //
 
 // Setup
-const { WebSocketServer } = require('ws');
+const { WebSocketServer } = require('ws')
 const wss = new WebSocketServer({
     port: process.env.PORT || 3000
 })
@@ -86,6 +86,10 @@ wss.on('connection', ws => {
             console.log(currentText)
 
             const doc = ensureDoc(docId, currentText)
+
+            console.log(doc)
+            console.log(doc.doc)
+            console.log(doc.doc.text)
 
             console.log(`Client ${clientId} connected to doc ${docId}`)
 
