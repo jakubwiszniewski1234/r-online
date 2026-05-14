@@ -90,7 +90,6 @@ wss.on('connection', ws => {
             const doc = ensureDoc(docId, currentText)
 
             console.log(doc.doc)
-            console.log(doc.doc.lines)
 
             console.log(`Client ${clientId} connected to doc ${docId}`)
 

@@ -14,30 +14,32 @@ for (var i = 0; i < allEditors.length; i++){
 
 const editor = editor_element
 
+const docId = "main"
+
 // Get server URL from user
-let inputServerElement = document.createElement("textarea")
-inputServerElement.style.padding = '30px'
-inputServerElement.style.border = '20px solid black'
-inputServerElement.style.backgroundColor = 'rgba(132, 255, 164, 1)'
-inputServerElement.value = "TEST"
-inputServerElement.style.zIndex = "100000"
-inputServerElement.style.position = "absolute"
-editor.container.appendChild(inputServerElement)
+// let inputServerElement = document.createElement("textarea")
+// inputServerElement.style.padding = '30px'
+// inputServerElement.style.border = '20px solid black'
+// inputServerElement.style.backgroundColor = 'rgba(132, 255, 164, 1)'
+// inputServerElement.value = "TEST"
+// inputServerElement.style.zIndex = "100000"
+// inputServerElement.style.position = "absolute"
+// editor.container.appendChild(inputServerElement)
 
-var serverURL
-var ws_temp
-inputServerElement.addEventListener("change", () => {
-    serverURL = inputServerElement.value
-    console.log(serverURL)
-    try{
-        const ws = new WebSocket(serverURL)
-        // its an event listener so later code will compute anyway
-    } catch (e) {
-        console.log(e.name, e.message)
-    }
-})
+// var serverURL
+// var ws_temp
+// inputServerElement.addEventListener("change", () => {
+//     serverURL = inputServerElement.value
+//     console.log(serverURL)
+//     try{
+//         const ws = new WebSocket(serverURL)
+//         // its an event listener so later code will compute anyway
+//     } catch (e) {
+//         console.log(e.name, e.message)
+//     }
+// })
 
-editor.container.appendChild(inputServerElement)
+// editor.container.appendChild(inputServerElement)
 
 const ws = new WebSocket('https://crdt-server.onrender.com');
 
@@ -49,8 +51,9 @@ let applyingRemote = false;
 ws.onopen = () => {
     ws.send(JSON.stringify({
         type: 'hello',
-        docId: 'main',
-        clientId
+        docId: docId,
+        clientId: clientId,
+        currentText: editor.session.getValue()
     }));
 };
 
@@ -68,7 +71,7 @@ editor.session.on('change', delta => {
         console.log(pendingDeltas)
         ws.send(JSON.stringify({
             type: 'delta',
-            docId: 'main',
+            docId: docId,
             clientId,
             opId: crypto.randomUUID(),
             baseRevision: revision,
@@ -83,11 +86,13 @@ ws.onmessage = ev => {
     const msg = JSON.parse(ev.data);
 
     if (msg.type === 'snapshot') {
+        if (msg.revision == 0) return
+
         applyingRemote = true;
-        editor.setValue(msg.text, -1);
-        revision = msg.revision;
-        applyingRemote = false;
-        return;
+        editor.setValue(msg.lines, -1)
+        revision = msg.revision
+        applyingRemote = false
+        return
     }
 
     if (msg.type === 'delta') {
