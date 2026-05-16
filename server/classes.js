@@ -30,4 +30,20 @@ class ServerEditor{
     }
 }
 
-module.exports = { ServerEditor }
+class Cursor {
+    constructor(clientId, position, id){
+        this.clientId = clientId
+        this.position = position
+        this.id = id
+    }
+
+    setPosition(newPosition){
+        this.position = newPosition
+    }
+
+    getPosition(){
+        return this.position
+    }
+}
+
+module.exports = { ServerEditor, Cursor }

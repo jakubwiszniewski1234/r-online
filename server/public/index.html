@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<body>
+  <h1>Dane z serwera:</h1>
+  <div id="output"></div>
+
+  <script>
+    fetch("/api/docs")
+      .then(res => res.json())
+      .then(data => {
+        let text = ""
+        console.log(data)
+        const docs = data.docs
+        docs.forEach((doc) => {
+            text += doc
+        })
+        console.log("text")
+        document.getElementById("output").innerText =
+          text
+      })
+  </script>
+</body>
+</html>
