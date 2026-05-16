@@ -4,9 +4,9 @@
 
 // Credentials
 const docId = "main"
-const serverURL = `http://localhost:3000`
+// const serverURL = `http://localhost:3000`
 const clientId = crypto.randomUUID()
-// const serverURL = 'https://crdt-server.onrender.com'
+const serverURL = 'https://crdt-server.onrender.com'
 
 // Find focused editor
 // const { getCurrentSourceEditor } = require("./find_editor.js")
