@@ -309,7 +309,8 @@ class Form {
 
             client.connect()
 
-            createDisconnectButton()
+            joinButton.style.display = "none"
+            disconnectButton.style.display = "block"
         })
 
         this.form.querySelector("#cancelBtn").addEventListener("click", () => this.close())
@@ -342,13 +343,14 @@ function createConnectButton() {
     btn.style.cursor = "pointer"
     btn.style.boxShadow = "0 2px 10px rgba(0,0,0,0.7)"
     btn.style.fontSize = "12px"
+    btn.style.display = "block"
 
     btn.addEventListener("click", () => {
-        btn.remove()
         form.show()
     })
 
     document.body.appendChild(btn)
+    return btn
 }
 
 function createDisconnectButton() {
@@ -357,7 +359,7 @@ function createDisconnectButton() {
     btn.style.position = "fixed"
     btn.style.top = "4px"
     btn.style.right = "120px"
-    btn.style.zIndex = "9999"
+    btn.style.zIndex = "9998"
     btn.style.padding = "4px 8px"
     btn.style.borderRadius = "6px"
     btn.style.border = "none"
@@ -366,15 +368,19 @@ function createDisconnectButton() {
     btn.style.cursor = "pointer"
     btn.style.boxShadow = "0 2px 10px rgba(0,0,0,0.7)"
     btn.style.fontSize = "12px"
+    btn.style.display = "none"
 
     btn.addEventListener("click", () => {
         client.disconnect()
-        btn.remove()
-        createConnectButton()
+        joinButton.style.display = "block"
+        disconnectButton.style.display = "none"
     })
+
     document.body.appendChild(btn)
+    return btn
 }
 
 const form = new Form()
 // form.show()
-createConnectButton()
+const joinButton = createConnectButton()
+const disconnectButton = createConnectButton()
