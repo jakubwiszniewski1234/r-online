@@ -308,6 +308,8 @@ class Form {
             })
 
             client.connect()
+
+            createDisconnectButton()
         })
 
         this.form.querySelector("#cancelBtn").addEventListener("click", () => this.close())
@@ -344,7 +346,6 @@ function createConnectButton() {
     btn.addEventListener("click", () => {
         btn.remove()
         form.show()
-        createDisconnectButton()
     })
 
     document.body.appendChild(btn)
