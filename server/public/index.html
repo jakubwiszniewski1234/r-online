@@ -5,19 +5,36 @@
   <div id="output"></div>
 
   <script>
-    fetch("/api/docs")
-      .then(res => res.json())
-      .then(data => {
-        let text = ""
-        console.log(data)
-        const docs = data.docs
-        docs.forEach((doc) => {
+    let lastData = null
+
+    function fetchData() {
+      fetch("/api/docs")
+        .then(res => res.json())
+        .then(data => {
+          const docs = data.docs
+          let text = ""
+
+          docs.forEach(doc => {
             text += doc
+          })
+
+          // sprawdzanie czy dane się zmieniły
+          if (text !== lastData) {
+            console.log("Dane się zmieniły");
+            document.getElementById("output").innerText = text
+            lastData = text
+          } else {
+            console.log("Brak zmian")
+          }
         })
-        console.log("text")
-        document.getElementById("output").innerText =
-          text
-      })
+        .catch(err => console.error(err))
+    }
+
+    // pierwsze wywołanie od razu
+    fetchData()
+
+    // potem co 3 sekundy
+    setInterval(fetchData, 3000)
   </script>
 </body>
 </html>

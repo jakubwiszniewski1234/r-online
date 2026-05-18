@@ -7,7 +7,6 @@ const express = require("express")
 const http = require("http")
 const { WebSocketServer } = require('ws')
 
-
 const app = express()
 
 app.use((req, res, next) => {
@@ -53,9 +52,6 @@ function createServerEditor(){
 }
 
 // Setup
-
-
-
 function getAllConnectedClientsIds(){
     const clientsIds = []
 
@@ -126,7 +122,7 @@ wss.on('connection', ws => {
 
         if (!docId || !clientId) {
             console.error(`[WSS] Missing required fields in ${type} message.`)
-
+            console.log(msg)
             return
         }
 
@@ -162,7 +158,9 @@ wss.on('connection', ws => {
 
         // Adieu
         if (type === 'bye'){      
-            se.clients.remove(clientId)
+            se.clients = se.clients.filter(client => 
+                client !== clientId
+            )
 
             console.log(`[WSS] Client ${clientId} disconnected from doc ${docId}.`)
             return
@@ -255,4 +253,3 @@ wss.on('connection', ws => {
 
 server.listen(process.env.PORT || 3000)
 console.log(`[WSS] Server opened.`)
-
