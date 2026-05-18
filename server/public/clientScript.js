@@ -24,7 +24,7 @@ const editor = getEditor()
 class Client{
     constructor(){
         this.clientId = "guest_" + crypto.randomUUID().substring(0, 6)
-        this.serverURL = "https://crdt-server.onrender.com"
+        this.serverURL = "https://crdt-server.onrender.com" 
         this.docId = "main"
         this.cursorDelay = 100
         this.deltaDelay = 30
@@ -52,7 +52,7 @@ class Client{
     }
     
     connect(){
-        this.ws = new WebSocket(this.serverURL)
+        this.ws = ( this.ws ? this.ws : new WebSocket(this.serverURL) )
         const ws = this.ws
 
         ws.onopen = () => {
@@ -65,22 +65,14 @@ class Client{
             }))
         }
 
-        ws.onclose = () => {
-            ws.send(JSON.stringify({
-                type: 'bye',
-                docId: this.docId,
-                clientId: this.clientId
-            }))
-        }
-
         // Applied changes
         this.pendingDeltas = []
         this.debounceEditorTimer = 0
-        editor.session.on('change', delta => this.sendDeltaChanges(delta))
+        editor.session.on('change', this.handler1)
 
         // Cursor movement 
         this.debounceCursorTimer = 0
-        editor.selection.on("changeCursor", () => this.sendCursorChange(this.cursorDelay))
+        editor.selection.on("changeCursor", this.handler2)
 
         // Handle recieved messages
         ws.onmessage = ev => {
@@ -113,7 +105,7 @@ class Client{
         }, this.deltaDelay)
     }
 
-    sendCursorChange() {
+    sendCursorChange(delay) {
         clearTimeout(this.debounceCursorTimer)
         this.debounceCursorTimer = setTimeout(() => {
             this.ws.send(JSON.stringify({
@@ -122,7 +114,7 @@ class Client{
                 clientId: this.clientId,
                 cursorPosition: editor.getCursorPosition()
             }))
-        }, this.cursorDelay)
+        }, delay)
     }
 
     handleSnapshot(msg) {
@@ -146,7 +138,7 @@ class Client{
     }
 
     handleDelta(msg){
-        if (msg.sourceClientId === clientId) {
+        if (msg.sourceClientId === this.clientId) {
             this.revision = msg.revision
             return
         }
@@ -163,16 +155,18 @@ class Client{
     }
 
     handleCursor(msg){
-        if (!clientMarkers.has(msg.clientId)){
-            clientMarkers.set(msg.clientId, {
-                position: msg.position,
-                id: msg.id
+        if (!clientMarkers.has(msg.marker.clientId)){
+            clientMarkers.set(msg.marker.clientId, {
+                position: msg.marker.position,
+                id: msg.marker.id
             })
         }
 
-        marker = clientMarkers.get(msg.clientId)
-        marker.position = msg.position
-        drawMarker(msg.clientId)
+        console.log(msg)
+
+        const marker = clientMarkers.get(msg.marker.clientId)
+        marker.position = msg.marker.position
+        drawMarker(msg.marker.clientId)
     }
 
     handleRemoveCursor(msg) {
@@ -186,8 +180,20 @@ class Client{
             clientId: this.clientId
         }))
 
-        this.ws.close()
+        editor.session.off('change', this.handler1)
+        editor.selection.off("changeCursor", this.handler2)
+
+        this.ws.send(JSON.stringify({
+            type: 'bye',
+            docId: this.docId,
+            clientId: this.clientId
+        }))
+
+        delete(this.ws)
     }
+
+    handler1 = delta => this.sendDeltaChanges(delta)
+    handler2 = () => this.sendCursorChange()
 }
 
 const client = new Client()
@@ -198,6 +204,7 @@ const clientMarkers = new Map()
 const style = document.createElement("style");
 style.textContent = `
   .ace_cursor_modifier {
+  width: 100px;
 }
 `
 document.head.appendChild(style)
@@ -207,10 +214,10 @@ function drawMarker(clientId){
     const { row, column } = marker.position
     editor.session.$markerId = marker.id
     const markerId = editor.session.addMarker(
-        new Range(row, column, row, column + 0.01),
+        new Range(row, column, row, column + .1),
         "ace_cursor ace_cursor_modifier",
         "text",
-        false
+        true
     )
 }
 
@@ -301,8 +308,6 @@ class Form {
             })
 
             client.connect()
-
-            createDisconnectButton()
         })
 
         this.form.querySelector("#cancelBtn").addEventListener("click", () => this.close())
@@ -320,27 +325,55 @@ class Form {
 
 }
 
+function createConnectButton() {
+    const btn = document.createElement("button")
+    btn.textContent = "Join"
+    btn.style.position = "fixed"
+    btn.style.top = "4px"
+    btn.style.right = "120px"
+    btn.style.zIndex = "9999"
+    btn.style.padding = "4px 8px"
+    btn.style.borderRadius = "6px"
+    btn.style.border = "none"
+    btn.style.background = "#21a113"
+    btn.style.color = "white"
+    btn.style.cursor = "pointer"
+    btn.style.boxShadow = "0 2px 10px rgba(0,0,0,0.7)"
+    btn.style.fontSize = "12px"
+
+    btn.addEventListener("click", () => {
+        btn.remove()
+        form.show()
+        createDisconnectButton()
+    })
+
+    document.body.appendChild(btn)
+}
+
 function createDisconnectButton() {
     const btn = document.createElement("button")
-    btn.textContent = "ABC"
+    btn.textContent = "Disconnect"
     btn.style.position = "fixed"
-    btn.style.top = "20px"
-    btn.style.right = "20px"
+    btn.style.top = "4px"
+    btn.style.right = "120px"
     btn.style.zIndex = "9999"
-    btn.style.padding = "10px 15px"
+    btn.style.padding = "4px 8px"
     btn.style.borderRadius = "6px"
     btn.style.border = "none"
     btn.style.background = "#007bff"
     btn.style.color = "white"
     btn.style.cursor = "pointer"
-    btn.style.boxShadow = "0 2px 10px rgba(0,0,0,0.2)"
+    btn.style.boxShadow = "0 2px 10px rgba(0,0,0,0.7)"
+    btn.style.fontSize = "12px"
 
     btn.addEventListener("click", () => {
         client.disconnect()
         btn.remove()
+        createConnectButton()
     })
     document.body.appendChild(btn)
 }
 
 const form = new Form()
-form.show()
+// form.show()
+createConnectButton()
