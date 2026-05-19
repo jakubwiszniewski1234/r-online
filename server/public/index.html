@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
 <body>
-  <h1>Dane z serwera:</h1>
+  <h1>Włączone dokumenty:</h1>
   <div id="output"></div>
 
   <script>
@@ -18,22 +18,16 @@
             text += doc
           })
 
-          // sprawdzanie czy dane się zmieniły
           if (text !== lastData) {
-            console.log("Dane się zmieniły");
             document.getElementById("output").innerText = text
             lastData = text
-          } else {
-            console.log("Brak zmian")
           }
         })
         .catch(err => console.error(err))
     }
 
-    // pierwsze wywołanie od razu
     fetchData()
 
-    // potem co 3 sekundy
     setInterval(fetchData, 3000)
   </script>
 </body>

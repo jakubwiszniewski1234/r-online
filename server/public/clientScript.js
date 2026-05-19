@@ -24,9 +24,9 @@ const editor = getEditor()
 class Client{
     constructor(){
         this.clientId = "guest_" + crypto.randomUUID().substring(0, 6)
-        this.serverURL = "https://crdt-server.onrender.com" 
+        this.serverURL = "http://localhost:3000" // "https://crdt-server.onrender.com" 
         this.docId = "main"
-        this.cursorDelay = 100
+        this.cursorDelay = 30
         this.deltaDelay = 30
         this.revision = 0
         this.handleMessage = {
@@ -151,6 +151,7 @@ class Client{
         this.applyRemote(() => {
             editor.session.getDocument().applyDeltas(msg.delta)
             this.revision = msg.revision
+            drawMarker(msg.sourceClientId)
         })
     }
 
@@ -314,7 +315,6 @@ class Form {
         })
 
         this.form.querySelector("#cancelBtn").addEventListener("click", () => this.close())
-
         this.formBox.appendChild(this.form)
         this.overlay.appendChild(this.formBox)
         document.body.appendChild(this.overlay)
@@ -345,11 +345,6 @@ function createConnectButton() {
     btn.style.fontSize = "12px"
     btn.style.display = "block"
 
-    btn.addEventListener("click", () => {
-        form.show()
-    })
-
-    document.body.appendChild(btn)
     return btn
 }
 
@@ -370,17 +365,21 @@ function createDisconnectButton() {
     btn.style.fontSize = "12px"
     btn.style.display = "none"
 
-    btn.addEventListener("click", () => {
-        client.disconnect()
-        joinButton.style.display = "block"
-        disconnectButton.style.display = "none"
-    })
-
-    document.body.appendChild(btn)
     return btn
 }
 
 const form = new Form()
 // form.show()
 const joinButton = createConnectButton()
-const disconnectButton = createConnectButton()
+joinButton.addEventListener("click", () => {
+    form.show()
+})
+document.body.appendChild(joinButton)
+
+const disconnectButton = createDisconnectButton()
+disconnectButton.addEventListener("click", () => {
+    client.disconnect()
+    joinButton.style.display = "block"
+    disconnectButton.style.display = "none"
+})
+document.body.appendChild(disconnectButton)
