@@ -24,7 +24,7 @@ const editor = getEditor()
 class Client{
     constructor(){
         this.clientId = "guest_" + crypto.randomUUID().substring(0, 6)
-        this.serverURL = "https://crdt-server.onrender.com" 
+        this.serverURL = "http://localhost:3000" // "https://crdt-server.onrender.com" 
         this.docId = "main"
         this.cursorDelay = 30
         this.deltaDelay = 30
@@ -205,7 +205,8 @@ const clientMarkers = new Map()
 const style = document.createElement("style");
 style.textContent = `
   .ace_cursor_modifier {
-  width: 100px;
+  color: '#ff0000';
+  background-color: #0000ff;
 }
 `
 document.head.appendChild(style)
@@ -216,7 +217,7 @@ function drawMarker(clientId){
     editor.session.$markerId = marker.id
     const markerId = editor.session.addMarker(
         new Range(row, column, row, column + .1),
-        "ace_cursor ace_cursor_modifier",
+        "ace_cursor_modifier ace_cursor",
         "text",
         true
     )
