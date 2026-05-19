@@ -1,6 +1,17 @@
-// Find focused editor
-var allEditors = document.querySelectorAll(".ace_editor")
+//
+//  R Online client
+//
 
+// Credentials
+const docId = "main"
+const serverURL = "http://localhost:3000"
+const clientId = crypto.randomUUID()
+// const serverURL = 'https://crdt-server.onrender.com'
+
+// Find focused editor
+// const { getCurrentSourceEditor } = require("./find_editor.js")
+// const editor = getCurrentSourceEditor()
+var allEditors = document.querySelectorAll(".ace_editor")
 for (var i = 0; i < allEditors.length; i++){
     el = allEditors[i]
     console.log(el)
@@ -14,61 +25,77 @@ for (var i = 0; i < allEditors.length; i++){
 
 const editor = editor_element
 
-const docId = "main"
+const Range = ace.require("ace/range").Range
+const { row, column } = editor.getCursorPosition()
 
-// Get server URL from user
-// let inputServerElement = document.createElement("textarea")
-// inputServerElement.style.padding = '30px'
-// inputServerElement.style.border = '20px solid black'
-// inputServerElement.style.backgroundColor = 'rgba(132, 255, 164, 1)'
-// inputServerElement.value = "TEST"
-// inputServerElement.style.zIndex = "100000"
-// inputServerElement.style.position = "absolute"
-// editor.container.appendChild(inputServerElement)
-
-// var serverURL
-// var ws_temp
-// inputServerElement.addEventListener("change", () => {
-//     serverURL = inputServerElement.value
-//     console.log(serverURL)
-//     try{
-//         const ws = new WebSocket(serverURL)
-//         // its an event listener so later code will compute anyway
-//     } catch (e) {
-//         console.log(e.name, e.message)
-//     }
-// })
-
-// editor.container.appendChild(inputServerElement)
-
-const ws = new WebSocket('https://crdt-server.onrender.com');
+const style = document.createElement("style");
+style.textContent = `
+  .ace_cursor_modifier {
+}
+`
+document.head.appendChild(style)
 
 
-const clientId = crypto.randomUUID();
-let revision = 0;
-let applyingRemote = false;
+// Other clients markers
+const clientMarkers = new Map()
+
+function drawMarker(clientId){
+    const marker = clientMarkers.get(clientId)
+    const { row, column } = marker.position
+    editor.session.$markerId = marker.id
+    const markerId = editor.session.addMarker(
+        new Range(row, column, row, column + 0.01),
+        "ace_cursor ace_cursor_modifier",
+        "text",
+        false
+    )
+}
+
+function removeMarker(clientId){
+    const marker = clientMarkers.get(clientId)
+    editor.session.removeMarker(marker.id)
+
+    clientMarkers.delete(clientId)
+}
+
+const ws = new WebSocket(serverURL)
+
+let revision = 0
+let applyingRemote = false
+
+function applyRemote(func) {
+    applyingRemote = true
+    func()
+    applyingRemote = false
+}
 
 ws.onopen = () => {
     ws.send(JSON.stringify({
         type: 'hello',
         docId: docId,
         clientId: clientId,
-        currentText: editor.session.getValue()
-    }));
-};
+        currentText: editor.session.getValue(),
+        cursorPosition: editor.getCursorPosition()
+    }))
+}
 
+ws.onclose = () => {
+    ws.send(JSON.stringify({
+        type: 'bye',
+        docId: docId,
+        clientId: clientId
+    }))
+}
 
+// Applied changes
 let pendingDeltas = []
-let debounceTimer
-
+let debounceEditorTimer
 editor.session.on('change', delta => {
     if (applyingRemote) return
 
     pendingDeltas.push(delta)
-    
-    clearTimeout(debounceTimer)
-    debounceTimer = setTimeout(() => {
-        console.log(pendingDeltas)
+    clearTimeout(debounceEditorTimer)
+    debounceEditorTimer = setTimeout(() => {
         ws.send(JSON.stringify({
             type: 'delta',
             docId: docId,
@@ -82,30 +109,89 @@ editor.session.on('change', delta => {
     }, 30)
 })
 
+// Cursor movement 
+let debounceCursorTimer
+editor.selection.on("changeCursor", function() {
+  const cursorPos = editor.getCursorPosition()
+
+  clearTimeout(debounceCursorTimer)
+  debounceCursorTimer = setTimeout(() => {
+    console.log(cursorPos)
+    ws.send(JSON.stringify({
+        type: 'cursor',
+        docId: docId,
+        clientId: clientId,
+        cursorPosition: cursorPos
+    }))
+  }, 300)
+})
+
 ws.onmessage = ev => {
-    const msg = JSON.parse(ev.data);
+    const msg = JSON.parse(ev.data)
+    const { type } = msg
 
-    if (msg.type === 'snapshot') {
-        if (msg.revision == 0) return
+    if (type === 'snapshot') {
+        applyRemote(() => {
+            editor.setValue(msg.lines, -1)
+            revision = msg.revision
+        })
+        
+        msg.markers.forEach(marker => {
+            if (!marker.clientId == clientId){
+                clientMarkers.set(marker.clientId, { 
+                    position: marker.position, 
+                    id: marker.id 
+                })
+            }
+        })
 
-        applyingRemote = true;
-        editor.setValue(msg.lines, -1)
-        revision = msg.revision
-        applyingRemote = false
+        clientMarkers.forEach((marker, clientId) => {
+            drawMarker(clientId)
+        })
+
         return
     }
 
-    if (msg.type === 'delta') {
+    if (type === 'delta') {
         if (msg.sourceClientId === clientId) {
-            revision = msg.revision;
-            return;
+            revision = msg.revision
+            return
         }
 
-        console.log(msg.delta)
+        console.log(delta)
 
-        applyingRemote = true;
-        editor.session.getDocument().applyDeltas(msg.delta);
-        revision = msg.revision;
-        applyingRemote = false;
+        if (docId != docId){
+            console.log(`[LOCAL] Document ${docId} caught a message sent to ${msg.docId}, ignoring...`)
+            return
+        }
+
+        applyRemote(() => {
+            editor.session.getDocument().applyDeltas(msg.delta);
+            revision = msg.revision;
+        })
+
+        return
+    }
+
+    if (type === 'cursor') {
+        const { clientId, position, id } = msg.marker
+
+        if (!clientMarkers.has(clientId)){
+            clientMarkers.set(clientId, {
+                position: position,
+                id: id
+            })
+        }
+
+        marker = clientMarkers.get(clientId)
+        marker.position = position
+        drawMarker(clientId)
+
+        return
+    }
+
+    if (type === "removeCursor") {
+        const { clientId } = msg
+        removeMarker(clientId)
     }
 };

@@ -1,63 +1,110 @@
 //
-// Headless ACE
-//
-
-//  Requirements
-require("amd-loader")
-
-const ace_modules_folder = "./ace_modules"
-global.ace = require(ace_modules_folder + "/ace.js")
-require(ace_modules_folder + "/test/mockdom")
-
-const MockRenderer = require(ace_modules_folder + "/test/mockrenderer").MockRenderer
-const Editor = require(ace_modules_folder + "/editor").Editor
-const EditSession = require(ace_modules_folder + "/edit_session").EditSession
-const Document = require(ace_modules_folder + "/document").Document
-const Delta = require(ace_modules_folder + "/document").Delta
-
-//  Setup
-const renderer = new MockRenderer()
-const editor = new Editor(renderer)
-
-
-// Map of documents
-const docs = new Map();
-
-function createDoc(initialText) {
-    // Create new session
-    const document = new Document(initialText)
-    const session = new EditSession(document)
-    editor.setSession(session)
-
-    return {
-        doc: document,
-        revision: 0,
-        history: []
-    }
-}
-
-function ensureDoc(docId, initialText) {
-    if (!docs.has(docId)) {
-        console.log("Creating new document...")
-        docs.set(docId, createDoc(initialText))
-    }
-    return docs.get(docId)
-}
-
-function getDoc(docId) {
-    return docs.get(docId) || null
-}
-
-
-//
 // Server setup
 //
 
-// Setup
+// Send file
+const express = require("express")
+const http = require("http")
 const { WebSocketServer } = require('ws')
-const wss = new WebSocketServer({
-    port: process.env.PORT || 3000
+
+const app = express()
+
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  next()
 })
+
+app.use(express.static("public"))
+app.get("/api/docs", (req, res) => {
+    res.json({
+        docs: Array.from(serverEditors.keys()),
+        time: Date.now()
+    })
+})
+
+const server = http.createServer(app)
+const wss = new WebSocketServer({ server })
+
+//  Requirements
+require("amd-loader")
+const { MockRenderer } = require("./load_ace.js")
+const { ServerEditor, Cursor } = require("./classes.js")
+
+// Map of documents
+const serverEditors = new Map()
+
+function getServerEditor(docId){
+    if(!serverEditors.has(docId)){
+        serverEditors.set(docId, createServerEditor())
+    }
+    return serverEditors.get(docId) || null
+}
+
+function createServerEditor(){
+    return {
+        serverEditor: new ServerEditor(),
+        revision: -1,
+        history: [],
+        clients: [],
+        cursors: [],
+        newId: 0
+    }
+}
+
+// Setup
+function getAllConnectedClientsIds(){
+    const clientsIds = []
+
+    wss.clients.forEach(client => {
+        clientsIds.push(client.clientId)
+    })
+
+    return clientsIds
+}
+
+function removeInactiveClients(se) {
+    let clientsToRemove = []
+
+    se.clients.forEach(client => {
+        if (!connectedClients.includes(client)){
+            clientsToRemove.push(client)
+        }
+    })
+
+    if (clientsToRemove)
+        clientsToRemove.forEach(client => {
+            se.clients = se.clients.filter(clientId => 
+                clientId !== client
+            )
+
+            se.cursors = se.cursors.filter(cursor => 
+                cursor.clientId !== client
+            )
+
+            wss.clients.forEach(ws => {
+                if (se.clients.includes(ws.clientId)){
+                    ws.send(JSON.stringify({
+                        type: 'removeCursor',
+                        clientId: client
+                    }))
+                }
+            })
+        })
+        
+    delete(clientsToRemove)
+}
+
+// Check status of each server editor
+setInterval(() => {
+    connectedClients = getAllConnectedClientsIds()
+    serverEditors.forEach((se, key) => {
+        removeInactiveClients(se)
+
+        console.log(`Document "${key}": ${se.clients.length} clients connected.`)
+        if (se.clients.length === 0)
+            serverEditors.delete(key)
+    })
+}, 10000)
 
 //  Handle messages
 wss.on('connection', ws => {
@@ -67,91 +114,142 @@ wss.on('connection', ws => {
         try {
             msg = JSON.parse(raw.toString());
         } catch (err) {
-            console.error('Invalid JSON:', err)
+            console.error('[WSS] Invalid JSON:', err)
             return
         }
 
+        const { type, docId, clientId } = msg
+
+        if (!docId || !clientId) {
+            console.error(`[WSS] Missing required fields in ${type} message.`)
+            console.log(msg)
+            return
+        }
+
+        const se = getServerEditor(docId)
+
         // Handshake
-        if (msg.type === 'hello') {
-            console.log("Got hello message")
-            // handleHello(ws, msg)
-            const { docId, clientId, currentText } = msg
-
-            if (!docId || !clientId) {
-                console.error('Missing required fields in hello message.')
-                return
-            }
-
-            ws.docId = docId
+        if (type === 'hello') {
+            const { currentText, cursorPosition } = msg
+            
             ws.clientId = clientId
 
-            console.log(currentText)
+            se.clients.push(clientId)
+            se.cursors.push(new Cursor(clientId, cursorPosition, se.newId))
+            se.newId += 1
+            if (se.revision === -1){
+                se.serverEditor.setValue(currentText)
+                se.revision = 0
+            }
 
-            const doc = ensureDoc(docId, currentText)
-
-            console.log(doc.doc)
-
-            console.log(`Client ${clientId} connected to doc ${docId}`)
-
-            ws.send(JSON.stringify({
+            const out = JSON.stringify({
                 type: 'snapshot',
-                docId,
-                lines: doc.doc.getValue(),
-                revision: doc.revision
-            }));
+                docId: docId,
+                lines: se.serverEditor.getValue(),
+                revision: se.revision,
+                markers: se.cursors
+            })
+
+            ws.send(out)
+
+            console.log(`[WSS] Client ${clientId} connected to doc ${docId}.`)
+            return
+        }
+
+        // Adieu
+        if (type === 'bye'){      
+            se.clients = se.clients.filter(client => 
+                client !== clientId
+            )
+
+            console.log(`[WSS] Client ${clientId} disconnected from doc ${docId}.`)
             return
         }
 
         // New changes query
-        if (msg.type === 'delta') {
-            if (!ws.docId) ws.docId = msg.docId
-            console.log(`Recieved a "delta" message from ${ws.clientId} on file ${ws.docId}.`)
+        if (type === 'delta') {
+            const { docId, clientId, opId, baseRevision, delta } = msg
+            
+            if (!se.clients.includes(clientId)){
+                console.log(`[WSS] Client ${clientId} not connected to ${docId}, ignoring...`)
 
-            const doc = getDoc(ws.docId)
-
-            if (msg.baseRevision < doc.revision) {
-                
-                let transformed = msg.delta;
-                for (let i = msg.baseRevision; i < doc.history.length; i++) {
-                    const applied = doc.history[i].delta;
-                    
-                }
-                msg.delta = transformed;
-                msg.baseRevision = doc.revision;
+                return
             }
 
-            doc.doc.applyDeltas(msg.delta)
-            doc.revision += 1
-            doc.history.push({
-                revision: doc.revision,
-                clientId: msg.clientId,
-                opId: msg.opId,
-                delta: msg.delta
-            });
+            // if (baseRevision < se.revision) {
+            //     let transformed = msg.delta
+            //     for (let i = baseRevision; i < se.history.length; i++) {
+            //         const applied = se.history[i].delta
+            //     }
+            //     msg.delta = transformed
+            //     msg.baseRevision = se.revision
+            // }
 
+            se.serverEditor.getDocument().applyDeltas(delta)
+            se.revision += 1
+            se.history.push({
+                revision: se.revision,
+                clientId: clientId,
+                opId: opId,
+                delta: delta
+            })
 
             const out = JSON.stringify({
                 type: 'delta',
-                docId: msg.docId,
-                sourceClientId: msg.clientId,
-                opId: msg.opId,
-                revision: doc.revision,
-                delta: msg.delta
-            });
+                docId: docId,
+                sourceClientId: clientId,
+                opId: opId,
+                revision: se.revision,
+                delta: delta
+            })
 
             for (const client of wss.clients) {
-              if (client.readyState === 1 && client.clientId != msg.clientId) client.send(out);
+                if (!se.clients.includes(client.clientId))
+                    continue
+
+                if (client.readyState === 1 && client.clientId != clientId) 
+                    client.send(out)
             }
+
+            console.log(`[WSS] Recieved a "delta" message from ${clientId} on file ${docId}.`)
+            return
+        }
+
+        // Send positions of clients cursors
+        // TODO: Could be optimized
+        if (type === 'cursor'){
+            const { cursorPosition } = msg
+
+            se.cursors.forEach(cursor => {
+                if (cursor.clientId == clientId){
+                    cursor.setPosition(cursorPosition)
+
+                    const out = JSON.stringify({
+                        type: 'cursor',
+                        docId: docId,
+                        marker: cursor
+                    })
+
+                    for (const client of wss.clients) {
+                        if (!se.clients.includes(client.clientId))
+                            continue
+
+                        if (client.readyState === 1 && client.clientId != clientId) 
+                            client.send(out)
+                    }
+
+                    return
+                }
+            })
 
             return
         }
 
         // Ignore unrelated queries
-        if (msg.type !== 'delta') {
-            console.log(`Got a weird message of type ${msg.type}.`)
-            return
-        }
+        console.log(`[WSS] Got a weird message of type ${type}.`)
+        return
     })
 })
 
-console.log(`[WSS] Server opened.`);
+server.listen(process.env.PORT || 3000)
+console.log(`[WSS] Server opened.`)

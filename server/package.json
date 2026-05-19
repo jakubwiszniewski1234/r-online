@@ -13,6 +13,8 @@
   "dependencies": {
     "@y/websocket-server": "^0.1.5",
     "amd-loader": "^0.0.8",
+    "express": "^5.2.1",
+    "http": "^0.0.1-security",
     "ws": "^8.20.0"
   }
 }
