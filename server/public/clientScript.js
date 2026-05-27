@@ -24,7 +24,7 @@ const editor = getEditor()
 class Client{
     constructor(){
         this.clientId = "guest_" + crypto.randomUUID().substring(0, 6)
-        this.serverURL = "http://localhost:3000" // "https://crdt-server.onrender.com" 
+        this.serverURL = "https://crdt-server.onrender.com" 
         this.docId = "main"
         this.cursorDelay = 30
         this.deltaDelay = 30
