@@ -383,4 +383,4 @@ function createDisconnectButton() {
 const form = new Form()
 // form.show()
 const joinButton = createConnectButton()
-const disconnectButton = createConnectButton()
+const disconnectButton = createDisconnectButton()
