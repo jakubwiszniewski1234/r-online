@@ -1,6 +1,7 @@
 # R Online
 A real-time collaborating extension for RStudio IDE.
 Check server [demo](https://crdt-server.onrender.com/).
+<img src="./server/public/demo1.png" alt="Demo aplikacji" width="600">
 
 ## About project
 This repository is a monorepo of a RStudio (partial) extension, allowing multiple users to edit multiple files **IN REAL-TIME** in RStudio IDE on their own clients.
